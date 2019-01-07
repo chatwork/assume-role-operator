@@ -1,0 +1,19 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: assume-role-operator
+  namespace: operator
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: assume-role-operator
+      annotations:
+        iam.amazonaws.com/role: "arn:aws:iam::XXXXXXXX:role/assume-role-operator_role"
+    spec:
+      containers:
+        - name: assume-role-operator
+          image: cwsakamoto/assume-role-operator:latest
+          imagePullPolicy: Always
+      serviceAccountName: "assume-role-operator"

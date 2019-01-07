@@ -1,0 +1,7 @@
+apiVersion: "aws.chatwork/v1alpha1"
+kind: AssumeRole
+metadata:
+  name: test
+spec:
+  cluster_name: <CLUSTER_NAME>
+  role_name: <ROLE_NAME> # not arn
