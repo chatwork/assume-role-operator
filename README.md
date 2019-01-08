@@ -6,7 +6,7 @@ Target controller role is only role made from kube-aws.
 
 # Getting Started
 
-## kube-aws controller name strict
+## kube-aws controller role name strict
 
 kube-aws(>= 0.11.1) has strict mode for role name that fixes the role name of the controller.
 You need to use this mode.
@@ -63,7 +63,7 @@ and assume policy
 }
 ```
 
-## Apply rbac and deployment
+## Apply RBAC and Deployment
 
 ToDo: helm chart
 
