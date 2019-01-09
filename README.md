@@ -63,16 +63,22 @@ and assume policy
 }
 ```
 
-## Apply RBAC and Deployment
+## Apply Helm Chart
 
-ToDo: helm chart
+Before helm chart install, you need to annotation to namespace.
+FYI: https://github.com/uswitch/kiam#overview
 
 ```
-kubectl apply -f manifests/rbac.yaml
-kubectl apply -f manifests/deployment.yaml
+$ kubectl apply -f namespace.yaml
 ```
 
-This deployment creates CRD(aws.chatwork).
+And install helm chart
+```
+$ cd chart
+$ helm install assume-role-operator --namespace <NAMESPACE> --set awsRoleArn="arn:aws:iam::XXXXX:role/assume-role-operator_role"
+```
+
+This chart(deployment) creates CRD(aws.chatwork).
 
 # About CRD
 
@@ -86,10 +92,10 @@ metadata:
 spec:
   # same kube-aws clusterName
   cluster_name: <CLUSTER_NAME>
-  role_name: <ROLE_NAME> # not arn
+  role_arn: <ROLE_ARN>
 ```
 
 This CRD will do th following.
 - get the cluster controller role name from cloudformation
   - kube-aws use cloudformation for kubernetes cluster
-- add controller role to ```role_name``` assume policy
+- add controller role to assume policy for ```role_arn```

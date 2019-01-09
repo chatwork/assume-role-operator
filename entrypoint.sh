@@ -76,14 +76,15 @@ update_assume_policy() {
 
 ensure_assume_policy() {
   if [ $# -eq 2 ] ;then
-    local role_name=$1
+    local role_arn=$1
     local cluster_name=$2
-
+    local role_name=${role_arn##*/}
     local policy_path=$PWD/assume_policy.json
-    get_assume_policy ${role_name} > $policy_path
-    local role_arn=$(get_controller_role_arn ${cluster_name})
+    local controller_role_arn=$(get_controller_role_arn ${cluster_name})
 
-    if ! check_assume_policy $policy_path $role_arn; then
+    get_assume_policy ${role_name} > $policy_path
+
+    if ! check_assume_policy $policy_path $controller_role_arn; then
       echo "Role not found in ${role_name} assume policy"
       echo "Update ${role_name} assume policy"
       update_assume_policy ${role_name} ${cluster_name}
@@ -106,8 +107,8 @@ while :; do
   for namespace in $(kubectl get namespace -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.end}'); do
     echo "Check Namespace: ${namespace}"
     for r in $(kubectl get ${CRD_NAME} -n ${namespace} -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.end}'); do
-      echo "Check $r ..."
-      ensure_assume_policy $(kubectl get -n ${namespace} ${CRD_NAME} $r -o jsonpath='{.spec.role_name}{"\t"}{.spec.cluster_name}')
+      echo "Check kind:AssumeRole $r ..."
+      ensure_assume_policy $(kubectl get -n ${namespace} ${CRD_NAME} $r -o jsonpath='{.spec.role_arn}{"\t"}{.spec.cluster_name}')
     done
   done
 
