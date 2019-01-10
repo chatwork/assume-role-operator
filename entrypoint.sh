@@ -5,7 +5,6 @@ ADD_POLICY_PATH=$PWD/add_policy.json
 REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')
 
 CRD_NAME="assumerole.aws.chatwork"
-echo ${REGION}
 
 check_crd() {
   local name=$1
@@ -31,9 +30,9 @@ get_controller_role_arn() {
 }
 
 check_assume_policy() {
-  local policy=$1
+  local policy_path=$1
   local role_arn=$2
-  grep ${role_arn} $policy >/dev/null
+  cat ${policy_path} | jq ".Statement[] | .Principal | select(.AWS==\"${role_arn}\")" | grep ${role_arn} > /dev/null
 }
 
 create_assume_policy() {
@@ -85,11 +84,11 @@ ensure_assume_policy() {
     get_assume_policy ${role_name} > $policy_path
 
     if ! check_assume_policy $policy_path $controller_role_arn; then
-      echo "Role not found in ${role_name} assume policy"
-      echo "Update ${role_name} assume policy"
+      echo "Role not found in ${role_arn} assume policy"
+      echo "Update ${role_arn} assume policy"
       update_assume_policy ${role_name} ${cluster_name}
     else
-      echo "Role found in ${role_name} assume policy"
+      echo "Role ${controller_role_arn} found in ${role_arn} assume policy"
     fi
   else
     echo "Error get ${CRD_NAME} resource"
@@ -105,9 +104,8 @@ while :; do
   fi
 
   for namespace in $(kubectl get namespace -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.end}'); do
-    echo "Check Namespace: ${namespace}"
     for r in $(kubectl get ${CRD_NAME} -n ${namespace} -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.end}'); do
-      echo "Check kind:AssumeRole $r ..."
+      echo "Napespace: ${namespace} Check 'kind:AssumeRole' $r ..."
       ensure_assume_policy $(kubectl get -n ${namespace} ${CRD_NAME} $r -o jsonpath='{.spec.role_arn}{"\t"}{.spec.cluster_name}')
     done
   done
