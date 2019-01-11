@@ -2,7 +2,8 @@
 
 BASE_POLICY_PATH=$PWD/base_policy.json
 ADD_POLICY_PATH=$PWD/add_policy.json
-REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')
+#REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')
+REGION=ap-northeast-1
 
 CRD_NAME="assumerole.aws.chatwork"
 
@@ -30,9 +31,8 @@ get_controller_role_arn() {
 }
 
 check_assume_policy() {
-  local policy_path=$1
-  local role_arn=$2
-  cat ${policy_path} | jq ".Statement[] | .Principal | select(.AWS==\"${role_arn}\")" | grep ${role_arn} > /dev/null
+  local role_arn=$1
+  cat ${BASE_POLICY_PATH} | jq -r ".Statement[] | .Principal | select(.AWS==\"${role_arn}\")" | grep ${role_arn} > /dev/null
 }
 
 create_assume_policy() {
@@ -62,13 +62,9 @@ update_assume_policy() {
   local cluster_name=$2
   local merge_policy_path=merge_assume_policy.json
 
-  get_assume_policy $role_name > $BASE_POLICY_PATH
   create_assume_policy $(get_controller_role_arn $cluster_name) > $ADD_POLICY_PATH
 
   merge_assume_policy > ${merge_policy_path}
-  #cat ${BASE_POLICY_PATH}
-  #cat ${ADD_POLICY_PATH}
-  cat ${merge_policy_path}
   aws --region ${REGION} iam update-assume-role-policy --role-name ${role_name} \
       --policy-document file://${merge_policy_path}
 }
@@ -81,14 +77,31 @@ ensure_assume_policy() {
     local policy_path=$PWD/assume_policy.json
     local controller_role_arn=$(get_controller_role_arn ${cluster_name})
 
-    get_assume_policy ${role_name} > $policy_path
+    echo "role_arn: ${role_arn}"
+    echo "cluster_name: ${cluster_name}"
+    echo "role_name: ${role_name}"
+    echo "controller_role_arn: ${controller_role_arn}"
 
-    if ! check_assume_policy $policy_path $controller_role_arn; then
+    while :; do
+      cp /dev/null ${BASE_POLICY_PATH}
+      get_assume_policy ${role_name} > ${BASE_POLICY_PATH}
+      if [ -s ${BASE_POLICY_PATH} ]; then
+        echo "role_name: ${role_name} assume policy"
+        cat ${BASE_POLICY_PATH}
+        break
+      else
+        echo "ERROR get_assume_policy ${role_name}"
+        sleep 5
+      fi
+    done
+
+    echo "check assume policy..."
+    if ! check_assume_policy $controller_role_arn; then
       echo "Role not found in ${role_arn} assume policy"
       echo "Update ${role_arn} assume policy"
       update_assume_policy ${role_name} ${cluster_name}
     else
-      echo "Role ${controller_role_arn} found in ${role_arn} assume policy"
+      echo "Role found ${controller_role_arn} in ${role_arn} assume policy"
     fi
   else
     echo "Error get ${CRD_NAME} resource"
