@@ -1,7 +1,5 @@
 #!/bin/bash
 
-BASE_POLICY_PATH=$PWD/base_policy.json
-ADD_POLICY_PATH=$PWD/add_policy.json
 #REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')
 REGION=ap-northeast-1
 
@@ -19,7 +17,8 @@ create_crd() {
 
 get_assume_policy() {
   local role_name=$1
-  aws --region=${REGION} iam get-role --role-name $role_name --query 'Role.AssumeRolePolicyDocument'
+  local base_policy_path=$2
+  aws --region=${REGION} iam get-role --role-name $role_name --query 'Role.AssumeRolePolicyDocument' > ${base_policy_path}
 }
 
 get_controller_role_arn() {
@@ -32,12 +31,49 @@ get_controller_role_arn() {
 
 check_assume_policy() {
   local role_arn=$1
-  cat ${BASE_POLICY_PATH} | jq -r ".Statement[] | .Principal | select(.AWS==\"${role_arn}\")" | grep ${role_arn} > /dev/null
+  local base_policy_path=$2
+  cat ${base_policy_path} | jq -r ".Statement[] | .Principal | select(.AWS==\"${role_arn}\")" | grep ${role_arn} > /dev/null
+}
+
+remove_invalid_role() {
+  local tmpfile=$(mktemp)
+  local role_name=$1
+  local base_policy_path=$2
+
+  cp ${base_policy_path} ${tmpfile}
+
+  cat ${tmpfile} | jq 'del(.Statement[] | .Principal | .AWS | strings | select(test("^(?!arn:)"))) | del(.Statement[] | select(.Principal == {}))' > ${base_policy_path}
+
+  cmp <(jq -cS . ${tmpfile}) <(jq -cS . ${base_policy_path})
+
+  if [ $? -ne 0 ]; then
+    echo "remove invalid role_arn"
+
+    #if ! grep "ec2.amazonaws.com" ${base_policy_path} >/dev/null; then
+    #  local add_policy_path=$(mktemp)
+    #  local merge_policy_path=$(mktemp)
+    #  create_assume_policy "Service" "ec2.amazonaws.com" ${add_policy_path}
+    #  merge_policy_path ${merge_policy_path} ${base_policy_path} ${add_policy_path}
+    #fi
+
+    aws --region ${REGION} iam update-assume-role-policy --role-name ${role_name} \
+        --policy-document file://${base_policy_path}
+
+    if [ $? -eq 0 ];then
+      echo "remove invalid role in ${role_name}"
+      cat ${base_policy_path}
+    fi
+
+  else
+    echo "This role got valid assume policy"
+  fi
 }
 
 create_assume_policy() {
-  local role_arn=$1
-  cat << EOS
+  local principal_key=$1
+  local principal_value=$2
+  local add_policy_path=$3
+  cat << EOS >${add_policy_path}
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -45,7 +81,7 @@ create_assume_policy() {
             "Sid": "",
             "Effect": "Allow",
             "Principal": {
-                "AWS": "${role_arn}"
+                "${principal_key}": "${principal_value}"
             },
             "Action": "sts:AssumeRole"
         }
@@ -53,20 +89,32 @@ create_assume_policy() {
 }
 EOS
 }
+
 merge_assume_policy() {
-  jq -s '.[0].Statement = [.[].Statement[]] | .[0]' ${BASE_POLICY_PATH} ${ADD_POLICY_PATH}
+  local merge_policy_path=$1
+  local base_policy_path=$2
+  local add_policy_path=$3
+  jq -s '.[0].Statement = [.[].Statement[]] | .[0]' ${base_policy_path} ${add_policy_path} > ${merge_policy_path}
 }
 
-update_assume_policy() {
+add_assume_policy() {
   local role_name=$1
   local cluster_name=$2
+  local base_policy_path=$3
+  local add_policy_path=$4
   local merge_policy_path=merge_assume_policy.json
 
-  create_assume_policy $(get_controller_role_arn $cluster_name) > $ADD_POLICY_PATH
+  create_assume_policy "AWS" $(get_controller_role_arn $cluster_name) ${add_policy_path}
 
-  merge_assume_policy > ${merge_policy_path}
+  merge_assume_policy ${merge_policy_path} ${base_policy_path} ${add_policy_path}
   aws --region ${REGION} iam update-assume-role-policy --role-name ${role_name} \
       --policy-document file://${merge_policy_path}
+
+  if [ $? -eq 0 ]; then
+    rm -f ${base_policy_path}
+    rm -f ${add_policy_path}
+    rm -f ${merge_policy_path}
+  fi
 }
 
 ensure_assume_policy() {
@@ -74,7 +122,9 @@ ensure_assume_policy() {
     local role_arn=$1
     local cluster_name=$2
     local role_name=${role_arn##*/}
-    local policy_path=$PWD/assume_policy.json
+    local policy_path=$(mktemp)
+    local base_policy_path=$(mktemp)
+    local add_policy_path=$(mktemp)
     local controller_role_arn=$(get_controller_role_arn ${cluster_name})
 
     echo "role_arn: ${role_arn}"
@@ -83,11 +133,11 @@ ensure_assume_policy() {
     echo "controller_role_arn: ${controller_role_arn}"
 
     while :; do
-      cp /dev/null ${BASE_POLICY_PATH}
-      get_assume_policy ${role_name} > ${BASE_POLICY_PATH}
-      if [ -s ${BASE_POLICY_PATH} ]; then
+      cp /dev/null ${base_policy_path}
+      get_assume_policy ${role_name} ${base_policy_path}
+      if [ -s ${base_policy_path} ]; then
         echo "role_name: ${role_name} assume policy"
-        cat ${BASE_POLICY_PATH}
+        cat ${base_policy_path}
         break
       else
         echo "ERROR get_assume_policy ${role_name}"
@@ -95,11 +145,13 @@ ensure_assume_policy() {
       fi
     done
 
+    remove_invalid_role ${role_name} ${base_policy_path}
+
     echo "check assume policy..."
-    if ! check_assume_policy $controller_role_arn; then
+    if ! check_assume_policy ${controller_role_arn} ${base_policy_path}; then
       echo "Role not found in ${role_arn} assume policy"
       echo "Update ${role_arn} assume policy"
-      update_assume_policy ${role_name} ${cluster_name}
+      add_assume_policy ${role_name} ${cluster_name} ${base_policy_path} ${add_policy_path}
     else
       echo "Role found ${controller_role_arn} in ${role_arn} assume policy"
     fi
@@ -123,4 +175,5 @@ while :; do
     done
   done
 
+  sleep 3
 done
