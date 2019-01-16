@@ -45,7 +45,7 @@ remove_invalid_role() {
   cat ${tmpfile} | \
   jq 'def notArn: . | has("AWS") and (.AWS | test("^arn:") | not);
       def hasOne: keys | length == 1;
-      del(.Statement[] | select(.Principal | notArn and hasOne)) | del(.Statement[].Principal | select(notArn) | .AWS)'
+      del(.Statement[] | select(.Principal | notArn and hasOne)) | del(.Statement[].Principal | select(notArn) | .AWS)' > ${base_policy_path}
 
   cmp <(jq -cS . ${tmpfile}) <(jq -cS . ${base_policy_path})
 
