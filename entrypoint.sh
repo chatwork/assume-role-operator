@@ -1,7 +1,6 @@
 #!/bin/bash
 
-#REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')
-REGION=ap-northeast-1
+REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')
 
 CRD_NAME="assumerole.aws.chatwork"
 
@@ -42,19 +41,16 @@ remove_invalid_role() {
 
   cp ${base_policy_path} ${tmpfile}
 
-  cat ${tmpfile} | jq 'del(.Statement[] | .Principal | .AWS | strings | select(test("^(?!arn:)"))) | del(.Statement[] | select(.Principal == {}))' > ${base_policy_path}
+  #cat ${tmpfile} | jq 'del(.Statement[] | .Principal | .AWS | strings | select(test("^(?!arn:)"))) | del(.Statement[] | select(.Principal == {}))' > ${base_policy_path}
+  cat ${tmpfile} | \
+  jq 'def notArn: . | has("AWS") and (.AWS | test("^arn:") | not);
+      def hasOne: keys | length == 1;
+      del(.Statement[] | select(.Principal | notArn and hasOne)) | del(.Statement[].Principal | select(notArn) | .AWS)'
 
   cmp <(jq -cS . ${tmpfile}) <(jq -cS . ${base_policy_path})
 
   if [ $? -ne 0 ]; then
     echo "remove invalid role_arn"
-
-    #if ! grep "ec2.amazonaws.com" ${base_policy_path} >/dev/null; then
-    #  local add_policy_path=$(mktemp)
-    #  local merge_policy_path=$(mktemp)
-    #  create_assume_policy "Service" "ec2.amazonaws.com" ${add_policy_path}
-    #  merge_policy_path ${merge_policy_path} ${base_policy_path} ${add_policy_path}
-    #fi
 
     aws --region ${REGION} iam update-assume-role-policy --role-name ${role_name} \
         --policy-document file://${base_policy_path}
@@ -169,11 +165,14 @@ while :; do
   fi
 
   for namespace in $(kubectl get namespace -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.end}'); do
-    for r in $(kubectl get ${CRD_NAME} -n ${namespace} -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.end}'); do
-      echo "Napespace: ${namespace} Check 'kind:AssumeRole' $r ..."
-      ensure_assume_policy $(kubectl get -n ${namespace} ${CRD_NAME} $r -o jsonpath='{.spec.role_arn}{"\t"}{.spec.cluster_name}')
-    done
+    if kubectl get ar --all-namespaces | grep -v "No resources found." > /dev/null; then
+      for r in $(kubectl get ${CRD_NAME} -n ${namespace} -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.end}'); do
+        echo "Napespace: ${namespace} Check 'kind:AssumeRole' $r ..."
+        ensure_assume_policy $(kubectl get -n ${namespace} ${CRD_NAME} $r -o jsonpath='{.spec.role_arn}{"\t"}{.spec.cluster_name}')
+      done
+    else
+     echo "No assumerole resource"
+    fi
   done
-
   sleep 3
 done
