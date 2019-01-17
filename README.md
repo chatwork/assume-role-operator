@@ -75,14 +75,16 @@ $ kubectl apply -f namespace.yaml
 And install helm chart
 ```
 $ cd chart
-$ helm install assume-role-operator --namespace <NAMESPACE> --set awsRoleArn="arn:aws:iam::XXXXX:role/assume-role-operator_role"
+$ helm install chatwork/assume-role-operator --namespace <NAMESPACE> --set awsRoleArn="arn:aws:iam::XXXXX:role/assume-role-operator_role"
 ```
+
+chart: https://github.com/chatwork/charts/assume-role-operator
 
 This chart(deployment) creates CRD(aws.chatwork).
 
-# About CRD
+# About Assumerole CRD
 
-If you use CRD, you need to create manifest, and apply.
+If you use Assumerole CRD, you need to create manifest, and apply.
 
 ```
 apiVersion: "aws.chatwork/v1alpha1"
@@ -95,7 +97,9 @@ spec:
   role_arn: <ROLE_ARN>
 ```
 
-This CRD will do th following.
+chart: https://github.com/chatwork/charts/assume-role-crd
+
+This CRD will do the following.
 - get the cluster controller role name from cloudformation
   - kube-aws use cloudformation for kubernetes cluster
 - add controller role to assume policy for ```role_arn```
