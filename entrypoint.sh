@@ -118,8 +118,7 @@ ensure_assume_policy() {
     local role_arn=$1
     local cluster_name=$2
     local role_name=${role_arn##*/}
-    local policy_path=$(mktemp)
-    local base_policy_path=$(mktemp)
+    local base_policy_path="./base_policy_path.json"
     local add_policy_path=$(mktemp)
     local controller_role_arn=$(get_controller_role_arn ${cluster_name})
 
@@ -137,8 +136,8 @@ ensure_assume_policy() {
         break
       else
         echo "ERROR get_assume_policy ${role_name}"
-        sleep 5
       fi
+      sleep 3
     done
 
     remove_invalid_role ${role_name} ${base_policy_path}
