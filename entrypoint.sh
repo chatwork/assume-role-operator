@@ -130,6 +130,7 @@ ensure_assume_policy() {
     while :; do
       cp /dev/null ${base_policy_path}
       get_assume_policy ${role_name} ${base_policy_path}
+      sleep 3
       if [ -s ${base_policy_path} ]; then
         echo "role_name: ${role_name} assume policy"
         cat ${base_policy_path}
@@ -137,7 +138,6 @@ ensure_assume_policy() {
       else
         echo "ERROR get_assume_policy ${role_name}"
       fi
-      sleep 3
     done
 
     remove_invalid_role ${role_name} ${base_policy_path}
