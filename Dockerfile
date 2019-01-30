@@ -2,8 +2,9 @@ FROM chatwork/alpine-sdk:3.8
 
 ARG KUBECTL_VERSION=1.11.7
 ARG AWS_VERSION=1.16.58
+ARG TAG=0.0.1
 
-LABEL version="${KUBECTL_VERSION}-${AWS_VERSION}"
+LABEL version="${KUBECTL_VERSION}-${AWS_VERSION}-${TAG}"
 LABEL maintainer="sakamoto@chatwork.com"
 
 ADD https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl /usr/local/bin/kubectl

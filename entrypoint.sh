@@ -118,7 +118,7 @@ ensure_assume_policy() {
     local role_arn=$1
     local cluster_name=$2
     local role_name=${role_arn##*/}
-    local base_policy_path="./base_policy_path.json"
+    local base_policy_path="./base_policy_path_$$.json"
     local add_policy_path=$(mktemp)
     local controller_role_arn=$(get_controller_role_arn ${cluster_name})
 
@@ -147,6 +147,7 @@ ensure_assume_policy() {
       echo "Role not found in ${role_arn} assume policy"
       echo "Update ${role_arn} assume policy"
       add_assume_policy ${role_name} ${cluster_name} ${base_policy_path} ${add_policy_path}
+      rm ${base_policy_path}
     else
       echo "Role found ${controller_role_arn} in ${role_arn} assume policy"
     fi
