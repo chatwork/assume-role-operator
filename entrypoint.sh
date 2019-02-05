@@ -41,7 +41,6 @@ remove_invalid_role() {
 
   cp ${base_policy_path} ${tmpfile}
 
-  #cat ${tmpfile} | jq 'del(.Statement[] | .Principal | .AWS | strings | select(test("^(?!arn:)"))) | del(.Statement[] | select(.Principal == {}))' > ${base_policy_path}
   cat ${tmpfile} | \
   jq 'def notArn: . | has("AWS") and (.AWS | test("^arn:") | not);
       def hasOne: keys | length == 1;
@@ -62,6 +61,33 @@ remove_invalid_role() {
 
   else
     echo "This role got valid assume policy"
+  fi
+}
+
+remove_duplication_role() {
+  local tmpfile=$(mktemp)
+  local role_name=$1
+  local base_policy_path=$2
+
+  cp ${base_policy_path} ${tmpfile}
+
+  jq '.Statement = (.Statement | unique)' $tmpfile > ${base_policy_path}
+
+  cmp <(jq -cS . ${tmpfile}) <(jq -cS . ${base_policy_path})
+
+  if [ $? -ne 0 ]; then
+    echo "remove duplicate role_arn"
+
+    aws --region ${REGION} iam update-assume-role-policy --role-name ${role_name} \
+        --policy-document file://${base_policy_path}
+
+    if [ $? -eq 0 ];then
+      echo "remove duplicate role in ${role_name}"
+      cat ${base_policy_path}
+    fi
+
+  else
+    echo "This role has unique assume policy"
   fi
 }
 
@@ -90,7 +116,9 @@ merge_assume_policy() {
   local merge_policy_path=$1
   local base_policy_path=$2
   local add_policy_path=$3
-  jq -s '.[0].Statement = [.[].Statement[]] | .[0]' ${base_policy_path} ${add_policy_path} > ${merge_policy_path}
+  tmpfile=$(mktemp)
+  jq -s '.[0].Statement = [.[].Statement[]] | .[0]' ${base_policy_path} ${add_policy_path} > $tmpfile
+  jq '.Statement = (.Statement | unique)' $tmpfile > ${merge_policy_path}
 }
 
 add_assume_policy() {
@@ -98,7 +126,7 @@ add_assume_policy() {
   local cluster_name=$2
   local base_policy_path=$3
   local add_policy_path=$4
-  local merge_policy_path=merge_assume_policy.json
+  local merge_policy_path=./merge_assume_policy.json
 
   create_assume_policy "AWS" $(get_controller_role_arn $cluster_name) ${add_policy_path}
 
@@ -118,7 +146,7 @@ ensure_assume_policy() {
     local role_arn=$1
     local cluster_name=$2
     local role_name=${role_arn##*/}
-    local base_policy_path="./base_policy_path_$$.json"
+    local base_policy_path=$(mktemp)
     local add_policy_path=$(mktemp)
     local controller_role_arn=$(get_controller_role_arn ${cluster_name})
 
@@ -128,7 +156,6 @@ ensure_assume_policy() {
     echo "controller_role_arn: ${controller_role_arn}"
 
     while :; do
-      cp /dev/null ${base_policy_path}
       get_assume_policy ${role_name} ${base_policy_path}
       sleep 3
       if [ -s ${base_policy_path} ]; then
@@ -141,13 +168,13 @@ ensure_assume_policy() {
     done
 
     remove_invalid_role ${role_name} ${base_policy_path}
+    remove_duplication_role ${role_name} ${base_policy_path}
 
     echo "check assume policy..."
     if ! check_assume_policy ${controller_role_arn} ${base_policy_path}; then
       echo "Role not found in ${role_arn} assume policy"
       echo "Update ${role_arn} assume policy"
       add_assume_policy ${role_name} ${cluster_name} ${base_policy_path} ${add_policy_path}
-      rm ${base_policy_path}
     else
       echo "Role found ${controller_role_arn} in ${role_arn} assume policy"
     fi
