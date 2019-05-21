@@ -194,7 +194,7 @@ while :; do
   for namespace in $(kubectl get namespace -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.end}'); do
     if kubectl get ar --all-namespaces | grep -v "No resources found." > /dev/null; then
       for r in $(kubectl get ${CRD_NAME} -n ${namespace} -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.end}'); do
-        echo "Napespace: ${namespace} Check 'kind:AssumeRole' $r ..."
+        echo "Namespace: ${namespace} Check 'kind:AssumeRole' $r ..."
         ensure_assume_policy $(kubectl get -n ${namespace} ${CRD_NAME} $r -o jsonpath='{.spec.role_arn}{"\t"}{.spec.cluster_name}')
       done
     else
