@@ -1,7 +1,6 @@
 #!/bin/bash
 
-#REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')
-REGION=ap-northeast-1
+REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r '.region')
 
 CRD_NAME="assumerole.aws.chatwork"
 
