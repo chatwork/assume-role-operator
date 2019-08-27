@@ -1,12 +1,11 @@
 # What is purpose of this operator?
 
-This operator is avalable for kubernetes controller role to assume role using kiam.
-Target controller role is only role made from kube-aws.
+This operator is avalable for kubernetes controller role or specified role to add role to assume role policy for kiam.
 
 
 # Getting Started
 
-## kube-aws controller role name strict
+## If you use kube-aws, controller role name strict
 
 kube-aws(>= 0.11.1) has strict mode for role name that fixes the role name of the controller.
 You need to use this mode.
@@ -86,6 +85,8 @@ This chart(deployment) creates CRD(aws.chatwork).
 
 If you use Assumerole CRD, you need to create manifest, and apply.
 
+If you use kube-aws:
+
 ```
 apiVersion: "aws.chatwork/v1alpha1"
 kind: AssumeRole
@@ -96,6 +97,20 @@ spec:
   cluster_name: <CLUSTER_NAME>
   role_arn: <ROLE_ARN>
 ```
+
+else:
+
+```
+apiVersion: "aws.chatwork/v1alpha1"
+kind: AssumeRole
+metadata:
+  name: assume-role-test
+spec:
+  role_arn: <ROLE_ARN>
+  assume_role_arn: <ASSUME_ROLE_ARN>
+```
+
+`assume_role_arn` is added to the `role_arn`'s assume policy.
 
 chart: https://github.com/chatwork/charts/assume-role-crd
 

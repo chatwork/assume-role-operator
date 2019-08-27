@@ -1,8 +1,8 @@
-FROM chatwork/alpine-sdk:3.8
+FROM chatwork/alpine-sdk:3.10
 
-ARG KUBECTL_VERSION=1.11.7
-ARG AWS_VERSION=1.16.58
-ARG TAG=0.0.2
+ARG KUBECTL_VERSION=1.14.6
+ARG AWS_VERSION=1.16.220
+ARG TAG=0.0.3
 
 LABEL version="${KUBECTL_VERSION}-${AWS_VERSION}-${TAG}"
 LABEL maintainer="sakamoto@chatwork.com"
